@@ -165,3 +165,75 @@ socket.on('leave-voice-room', (data) => {
   }
 });
 })
+
+// Member presence tracking handlers
+socket.on('join-room-member', (data) => {
+  const { roomId, userId, userName, userAvatar } = data;
+  
+  console.log(`👤 Member ${userName} (${userId}) joined room ${roomId}`);
+  
+  // Initialize room members if it doesn't exist
+  if (!roomMembers.has(roomId)) {
+    roomMembers.set(roomId, []);
+  }
+  
+  // Add member to room
+  const members = roomMembers.get(roomId);
+  const existingMember = members.find(m => m.userId === userId);
+  
+  if (!existingMember) {
+    const member = {
+      userId,
+      userName,
+      userAvatar,
+      socketId: socket.id,
+      joinedAt: new Date().toISOString()
+    };
+    
+    members.push(member);
+    roomMembers.set(roomId, members);
+    
+    console.log(`👤 Room ${roomId} now has ${members.length} members:`, members.map(m => m.userName));
+    
+    // Join socket room for member updates
+    socket.join(`members-${roomId}`);
+    
+    // Notify room about new member
+    socket.to(`members-${roomId}`).emit('member-joined', member);
+    
+    // Send current members list to new member
+    socket.emit('room-members-update', members);
+    
+    // Also broadcast updated list to all members
+    io.to(`members-${roomId}`).emit('room-members-update', members);
+  } else {
+    console.log(`👤 Member ${userName} already in room ${roomId}`);
+    // Update socket ID in case of reconnection
+    existingMember.socketId = socket.id;
+    socket.join(`members-${roomId}`);
+    socket.emit('room-members-update', members);
+  }
+});
+
+socket.on('leave-room-member', (data) => {
+  const { roomId, userId } = data;
+  
+  console.log(`👤 Member ${userId} left room ${roomId}`);
+  
+  if (roomMembers.has(roomId)) {
+    const members = roomMembers.get(roomId);
+    const leavingMember = members.find(m => m.userId === userId);
+    const updatedMembers = members.filter(m => m.userId !== userId);
+    
+    roomMembers.set(roomId, updatedMembers);
+    
+    // Leave socket room
+    socket.leave(`members-${roomId}`);
+    
+    // Notify other members
+    if (leavingMember) {
+      socket.to(`members-${roomId}`).emit('member-left', leavingMember);
+      io.to(`members-${roomId}`).emit('room-members-update', updatedMembers);
+    }
+  }
+});
