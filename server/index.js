@@ -237,3 +237,56 @@ socket.on('leave-room-member', (data) => {
     }
   }
 });
+
+// Chat handlers
+socket.on('join-chat-room', (data) => {
+  const { roomId, userId, userName } = data;
+  
+  console.log(`💬 ${userName} joined chat in room ${roomId}`);
+  
+  // Initialize room messages if it doesn't exist
+  if (!roomMessages.has(roomId)) {
+    roomMessages.set(roomId, []);
+  }
+  
+  // Join socket room for chat
+  socket.join(`chat-${roomId}`);
+  
+  // Send chat history to joining user
+  const messages = roomMessages.get(roomId);
+  socket.emit('chat-history', messages);
+});
+
+socket.on('send-message', (messageData) => {
+  const { roomId, userId, userName, userAvatar, message, timestamp } = messageData;
+  
+  console.log(`💬 Message from ${userName} in room ${roomId}:`, message);
+  
+  // Create message object
+  const messageObj = {
+    userId,
+    userName,
+    userAvatar,
+    message,
+    timestamp,
+    id: Date.now().toString() + Math.random().toString(36).substr(2, 9)
+  };
+  
+  // Store message in room history
+  if (!roomMessages.has(roomId)) {
+    roomMessages.set(roomId, []);
+  }
+  
+  const messages = roomMessages.get(roomId);
+  messages.push(messageObj);
+  
+  // Keep only last 100 messages per room
+  if (messages.length > 100) {
+    messages.splice(0, messages.length - 100);
+  }
+  
+  roomMessages.set(roomId, messages);
+  
+  // Broadcast message to all users in the chat room
+  io.to(`chat-${roomId}`).emit('new-message', messageObj);
+});
