@@ -290,3 +290,28 @@ socket.on('send-message', (messageData) => {
   // Broadcast message to all users in the chat room
   io.to(`chat-${roomId}`).emit('new-message', messageObj);
 });
+
+// Collaborative cursor handlers
+socket.on('cursor-change', (data) => {
+  const { roomId, userId, userName, position, color } = data;
+  
+  // Broadcast cursor position to all other users in the room
+  socket.to(roomId).emit('cursor-change', {
+    userId,
+    userName,
+    position,
+    color
+  });
+});
+
+socket.on('edit-highlight', (data) => {
+  const { roomId, userId, startPos, endPos, color } = data;
+  
+  // Broadcast edit highlight to all other users in the room
+  socket.to(roomId).emit('edit-highlight', {
+    userId,
+    startPos,
+    endPos,
+    color
+  });
+});
