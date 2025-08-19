@@ -75,4 +75,30 @@ io.on('connection', (socket) => {
     // Send current diagram state to the joining user
     socket.emit('diagram-state', roomDiagrams.get(roomId));
   });
+// Handle code changes
+socket.on('code-change', (data) => {
+  const { roomId, code, language } = data;
+  
+  // Update room state
+  if (rooms.has(roomId)) {
+    rooms.set(roomId, { code, language: language || rooms.get(roomId).language });
+  }
+  
+  // Broadcast to all other users in the room
+  socket.to(roomId).emit('code-change', data);
+});
+
+// Handle language changes
+socket.on('language-change', (data) => {
+  const { roomId, language } = data;
+  
+  // Update room state
+  if (rooms.has(roomId)) {
+    const roomData = rooms.get(roomId);
+    rooms.set(roomId, { ...roomData, language });
+  }
+  
+  // Broadcast to all other users in the room
+  socket.to(roomId).emit('language-change', data);
+});
 })
