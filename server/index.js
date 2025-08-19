@@ -101,4 +101,67 @@ socket.on('language-change', (data) => {
   // Broadcast to all other users in the room
   socket.to(roomId).emit('language-change', data);
 });
+
+// Voice chat handlers
+socket.on('join-voice-room', (data) => {
+  const { roomId, peerId, userName } = data;
+  console.log(`🔊 User ${userName} (${peerId}) joined voice room ${roomId}`);
+  
+  // Initialize voice room if it doesn't exist
+  if (!voiceRooms.has(roomId)) {
+    voiceRooms.set(roomId, []);
+    console.log(`🔊 Created new voice room: ${roomId}`);
+  }
+  
+  // Add participant to voice room
+  const participants = voiceRooms.get(roomId);
+  const existingParticipant = participants.find(p => p.peerId === peerId);
+  
+  if (!existingParticipant) {
+    const participant = { 
+      peerId, 
+      userName, 
+      socketId: socket.id 
+    };
+    participants.push(participant);
+    voiceRooms.set(roomId, participants);
+    
+    console.log(`🔊 Added participant. Room ${roomId} now has ${participants.length} participants:`, participants.map(p => p.userName));
+    
+    // Join socket room for voice
+    socket.join(`voice-${roomId}`);
+    
+    // Notify other participants about new user
+    console.log(`🔊 Notifying other participants about ${userName}`);
+    socket.to(`voice-${roomId}`).emit('voice-user-joined', participant);
+    
+    // Send current participants list to the new user (excluding themselves)
+    const otherParticipants = participants.filter(p => p.peerId !== peerId);
+    console.log(`🔊 Sending ${otherParticipants.length} existing participants to ${userName}`);
+    socket.emit('voice-participants', otherParticipants);
+    
+    // Also broadcast updated full list to everyone in the room
+    console.log(`🔊 Broadcasting full participant list to room ${roomId}`);
+    io.to(`voice-${roomId}`).emit('voice-participants', participants);
+  } else {
+    console.log(`🔊 User ${userName} already in voice room ${roomId}`);
+  }
+});
+
+socket.on('leave-voice-room', (data) => {
+  const { roomId, peerId } = data;
+  console.log(`User ${peerId} left voice room ${roomId}`);
+  
+  if (voiceRooms.has(roomId)) {
+    const participants = voiceRooms.get(roomId);
+    const updatedParticipants = participants.filter(p => p.peerId !== peerId);
+    voiceRooms.set(roomId, updatedParticipants);
+    
+    // Leave socket room
+    socket.leave(`voice-${roomId}`);
+    
+    // Notify other participants
+    socket.to(`voice-${roomId}`).emit('voice-user-left', { peerId });
+  }
+});
 })
